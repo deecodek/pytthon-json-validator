@@ -1,15 +1,66 @@
 import csv
 import json
 import os
+import sys
 from pathlib import Path
 
 class UniversalCSVToJSONConverter:
     def __init__(self):
         self.csv_headers = []
-        self.db_schema = {}  
+        self.db_schema = {}  # {custom_key: {csv_column: str, data_type: str}}
         self.input_path = ""
         self.output_path = ""
         
+    def show_help(self):
+        """Display help information"""
+        help_text = """
+=====================================
+    Universal CSV to JSON Converter
+=====================================
+
+USAGE:
+    python csv_converter.py [OPTIONS]
+    python csv_converter.py --help
+
+DESCRIPTION:
+    A universal tool to convert any CSV file to JSON format with custom
+    key names and data types. The converter follows this workflow:
+    
+    1. Automatically detects all CSV headers
+    2. For each header, you specify a custom key name
+    3. For each custom key, you specify the data type
+    4. Converts the CSV to JSON with proper data typing
+
+WORKFLOW:
+    CSV Headers → Custom Key Names → Data Types → JSON Output
+
+DATA TYPES:
+    - string:  Text data (default)
+    - integer: Whole numbers (e.g., 123, -456)
+    - float:   Decimal numbers (e.g., 123.45, -67.89)
+    - boolean: True/False values (true, 1, yes, on = True)
+
+SKIPPING COLUMNS:
+    - Leave custom key name blank to skip a CSV column
+    - Leave data type blank to skip a custom key
+
+EXAMPLE:
+    CSV Headers: name,age,salary,active,department
+    Custom Keys: employee_name,employee_age,monthly_salary,is_active,dept_name
+    Data Types:  string,integer,float,boolean,string
+
+OPTIONS:
+    --help, -h    Show this help message
+
+TIPS:
+    - All CSV columns are shown - nothing is hidden
+    - You can skip any column by leaving fields blank
+    - Press Ctrl+C to cancel at any time
+    - Preview data before final conversion
+"""
+        print(help_text)
+        sys.exit(0)
+    
     def clear_screen(self):
         """Clear the terminal screen"""
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -21,15 +72,19 @@ class UniversalCSVToJSONConverter:
         else:
             prompt = f"{prompt}: "
         
-        user_input = input(prompt).strip()
-        return user_input if user_input else default
+        try:
+            user_input = input(prompt).strip()
+            return user_input if user_input else default
+        except KeyboardInterrupt:
+            print("\n\n⚠️  Operation cancelled by user.")
+            sys.exit(0)
     
     def get_file_paths(self):
         """Get input and output file paths"""
         self.clear_screen()
         print("=== File Configuration ===")
         
-        
+        # Input file
         while True:
             self.input_path = self.get_user_input("Enter CSV file path", "data.csv")
             if os.path.exists(self.input_path):
@@ -40,7 +95,7 @@ class UniversalCSVToJSONConverter:
                 if retry.lower() != 'y':
                     return False
         
-        
+        # Output file
         default_output = str(Path(self.input_path).with_suffix('.json'))
         self.output_path = self.get_user_input("Enter output JSON file path", default_output)
         return True
@@ -74,9 +129,9 @@ class UniversalCSVToJSONConverter:
                     print(f"Key '{custom_key}' already used. Please choose a different name.")
                     continue
                 else:
-                    
+                    # Get data type for this key
                     data_type = self.get_data_type(custom_key)
-                    if data_type is not None:  
+                    if data_type is not None:  # Not skipped
                         self.db_schema[custom_key] = {
                             'csv_column': header,
                             'data_type': data_type
@@ -112,7 +167,7 @@ class UniversalCSVToJSONConverter:
             if data_type == 'string':
                 return value
             elif data_type == 'integer':
-                return int(float(value))  
+                return int(float(value))  # Handle cases like "123.0"
             elif data_type == 'float':
                 return float(value)
             elif data_type == 'boolean':
@@ -133,7 +188,7 @@ class UniversalCSVToJSONConverter:
             for row_num, row in enumerate(reader, 2):
                 mapped_row = {}
                 
-                
+                # Process each mapped key
                 for custom_key, mapping_info in self.db_schema.items():
                     csv_column = mapping_info['csv_column']
                     data_type = mapping_info['data_type']
@@ -205,35 +260,35 @@ class UniversalCSVToJSONConverter:
     def run(self):
         """Main execution flow"""
         try:
-            
+            # Get file paths
             if not self.get_file_paths():
                 return
             
-            
+            # Read CSV headers
             self.read_csv_headers()
             
-            
+            # Create key mapping
             self.create_key_mapping()
             
-            
-            if self.db_schema:  
+            # Show summary
+            if self.db_schema:  # Only proceed if some columns were mapped
                 self.show_summary()
                 if self.get_user_input("\nProceed with conversion? (y/n)", "y").lower() != 'y':
                     print("Conversion cancelled.")
                     return
                 
-                
+                # Convert data
                 data = self.convert_data()
                 
-                
+                # Preview data
                 if not self.preview_data(data):
                     print("Conversion cancelled.")
                     return
                 
-                
+                # Save JSON
                 self.save_json(data)
                 
-                
+                # Ask to open file
                 if self.get_user_input("Open the output file? (y/n)", "n").lower() == 'y':
                     try:
                         os.startfile(self.output_path) if os.name == 'nt' else os.system(f'open "{self.output_path}"')
@@ -251,7 +306,15 @@ class UniversalCSVToJSONConverter:
                 traceback.print_exc()
 
 def main():
-    """Main application"""
+    """Main application with command line argument support"""
+    
+    # Check for help arguments
+    if '--help' in sys.argv or '-h' in sys.argv:
+        converter = UniversalCSVToJSONConverter()
+        converter.show_help()
+        return
+    
+    # Run the converter
     converter = UniversalCSVToJSONConverter()
     
     while True:
@@ -260,7 +323,8 @@ def main():
         print("    Universal CSV to JSON Converter")
         print("=====================================")
         print("1. Start conversion")
-        print("2. Exit")
+        print("2. Show help")
+        print("3. Exit")
         print("-------------------------------------")
         
         choice = converter.get_user_input("Select option", "1")
@@ -269,6 +333,8 @@ def main():
             converter.run()
             input("\nPress Enter to continue...")
         elif choice == "2":
+            converter.show_help()
+        elif choice == "3":
             print("Goodbye! 👋")
             break
         else:
